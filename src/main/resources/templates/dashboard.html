@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mock Auth — Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #f0f2f5; color: #1a1a2e; }
+        .header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: #fff; padding: 20px 32px; }
+        .header h1 { font-size: 22px; font-weight: 600; }
+        .header p { font-size: 13px; color: #94a3b8; margin-top: 4px; }
+        .nav { margin-top: 12px; display: flex; gap: 8px; }
+        .nav-link { color: #94a3b8; text-decoration: none; padding: 6px 16px; border-radius: 6px; font-size: 13px; font-weight: 500; transition: all 0.2s; }
+        .nav-link:hover { background: rgba(255,255,255,0.1); color: #fff; }
+        .nav-link.active { background: rgba(255,255,255,0.15); color: #fff; }
+        .container { max-width: 1200px; margin: 24px auto; padding: 0 16px; }
+
+        /* Summary cards */
+        .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .card { background: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        .card .label { font-size: 12px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+        .card .value { font-size: 28px; font-weight: 700; margin-top: 4px; }
+        .card.total .value { color: #1a1a2e; }
+        .card.completed .value { color: #059669; }
+        .card.processing .value { color: #d97706; }
+        .card.failed .value { color: #dc2626; }
+
+        /* Filter bar */
+        .filter-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+        .filter-bar label { font-size: 13px; font-weight: 500; color: #475569; }
+        .filter-bar select, .filter-bar button {
+            padding: 7px 14px; border-radius: 6px; border: 1px solid #cbd5e1;
+            font-size: 13px; background: #fff; cursor: pointer;
+        }
+        .filter-bar button { background: #1a1a2e; color: #fff; border: none; }
+        .filter-bar button:hover { background: #16213e; }
+        .filter-bar a.clear { font-size: 13px; color: #64748b; text-decoration: none; }
+        .filter-bar a.clear:hover { color: #1a1a2e; }
+
+        /* Table */
+        .table-wrap { background: #fff; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: #f8fafc; text-align: left; padding: 12px 16px; font-size: 12px;
+             text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; border-bottom: 1px solid #e2e8f0; }
+        td { padding: 12px 16px; font-size: 14px; border-bottom: 1px solid #f1f5f9; }
+        tr:hover td { background: #f8fafc; }
+        a.batch-link { color: #2563eb; text-decoration: none; font-weight: 500; }
+        a.batch-link:hover { text-decoration: underline; }
+
+        /* Status badges */
+        .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px;
+                 font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+        .badge-received { background: #e0f2fe; color: #0369a1; }
+        .badge-processing { background: #fef3c7; color: #92400e; }
+        .badge-completed { background: #d1fae5; color: #065f46; }
+        .badge-failed { background: #fee2e2; color: #991b1b; }
+
+        /* Pagination */
+        .pagination { display: flex; justify-content: center; gap: 8px; padding: 20px; }
+        .pagination a, .pagination span {
+            padding: 6px 14px; border-radius: 6px; font-size: 13px;
+            text-decoration: none; border: 1px solid #e2e8f0;
+        }
+        .pagination a { color: #475569; background: #fff; }
+        .pagination a:hover { background: #f1f5f9; }
+        .pagination span.active { background: #1a1a2e; color: #fff; border-color: #1a1a2e; }
+        .pagination span.disabled { color: #cbd5e1; cursor: default; }
+
+        /* Empty state */
+        .empty { text-align: center; padding: 60px 20px; color: #94a3b8; }
+        .empty h3 { font-size: 18px; margin-bottom: 8px; color: #64748b; }
+        .empty p { font-size: 14px; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .table-wrap { overflow-x: auto; }
+            table { min-width: 700px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔐 Mock Authorization Service</h1>
+        <p>Batch processing dashboard — tracking all authorization decisions</p>
+        <nav class="nav">
+            <a href="/" class="nav-link active">📦 Batch Processing</a>
+            <a href="/key-exchange" class="nav-link">🔑 Key Exchange</a>
+        </nav>
+    </div>
+
+    <div class="container">
+        <!-- Summary Cards -->
+        <div class="summary">
+            <div class="card total">
+                <div class="label">Total Batches</div>
+                <div class="value" th:text="${batches.totalElements}">0</div>
+            </div>
+            <div class="card completed">
+                <div class="label">Completed</div>
+                <div class="value" th:text="${batches.content.?[status.name() == 'COMPLETED'].size()}">0</div>
+            </div>
+            <div class="card processing">
+                <div class="label">Processing</div>
+                <div class="value" th:text="${batches.content.?[status.name() == 'PROCESSING'].size()}">0</div>
+            </div>
+            <div class="card failed">
+                <div class="label">Failed</div>
+                <div class="value" th:text="${batches.content.?[status.name() == 'FAILED'].size()}">0</div>
+            </div>
+        </div>
+
+        <!-- Filter -->
+        <form class="filter-bar" th:action="@{/}" method="get">
+            <label>Filter by status:</label>
+            <select name="status">
+                <option value="">All</option>
+                <option th:each="s : ${statuses}" th:value="${s}" th:text="${s}"
+                        th:selected="${statusFilter != null && statusFilter.toUpperCase() == s.name()}">STATUS</option>
+            </select>
+            <button type="submit">Filter</button>
+            <a class="clear" th:href="@{/}">Clear</a>
+        </form>
+
+        <!-- Batch Table -->
+        <div class="table-wrap" th:if="${!batches.content.isEmpty()}">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Batch ID</th>
+                        <th>Status</th>
+                        <th>Total</th>
+                        <th>Approved</th>
+                        <th>Declined</th>
+                        <th>Received</th>
+                        <th>Completed</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="batch : ${batches.content}">
+                        <td>
+                            <a class="batch-link" th:href="@{/batch/{id}(id=${batch.batchId})}"
+                               th:text="${batch.batchId}">BATCH-001</a>
+                        </td>
+                        <td>
+                            <span class="badge"
+                                  th:classappend="${batch.status.name() == 'RECEIVED'} ? 'badge-received' :
+                                                  (${batch.status.name() == 'PROCESSING'} ? 'badge-processing' :
+                                                  (${batch.status.name() == 'COMPLETED'} ? 'badge-completed' : 'badge-failed'))"
+                                  th:text="${batch.status}">STATUS</span>
+                        </td>
+                        <td th:text="${batch.totalRecords}">0</td>
+                        <td style="color: #059669; font-weight: 600;" th:text="${batch.approvedCount}">0</td>
+                        <td style="color: #dc2626; font-weight: 600;" th:text="${batch.declinedCount}">0</td>
+                        <td th:text="${batch.receivedAt != null} ? ${#temporals.format(batch.receivedAt, 'yyyy-MM-dd HH:mm:ss')} : '-'">-</td>
+                        <td th:text="${batch.completedAt != null} ? ${#temporals.format(batch.completedAt, 'yyyy-MM-dd HH:mm:ss')} : '-'">-</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- Pagination -->
+            <div class="pagination" th:if="${batches.totalPages > 1}">
+                <a th:if="${currentPage > 0}"
+                   th:href="@{/(page=${currentPage - 1}, status=${statusFilter})}">« Prev</a>
+                <span class="disabled" th:if="${currentPage == 0}">« Prev</span>
+
+                <th:block th:each="i : ${#numbers.sequence(0, batches.totalPages - 1)}">
+                    <span class="active" th:if="${i == currentPage}" th:text="${i + 1}">1</span>
+                    <a th:unless="${i == currentPage}"
+                       th:href="@{/(page=${i}, status=${statusFilter})}" th:text="${i + 1}">1</a>
+                </th:block>
+
+                <a th:if="${currentPage < batches.totalPages - 1}"
+                   th:href="@{/(page=${currentPage + 1}, status=${statusFilter})}">Next »</a>
+                <span class="disabled" th:if="${currentPage >= batches.totalPages - 1}">Next »</span>
+            </div>
+        </div>
+
+        <!-- Empty state -->
+        <div class="empty" th:if="${batches.content.isEmpty()}">
+            <h3>No batch jobs yet</h3>
+            <p>Waiting for messages on Kafka topic <strong>batch-request</strong>...</p>
+        </div>
+    </div>
+</body>
+</html>

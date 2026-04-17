@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Error</title>
+    <style>
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f0f2f5; display: flex;
+               justify-content: center; align-items: center; min-height: 100vh; }
+        .error-card { background: #fff; border-radius: 12px; padding: 40px; text-align: center;
+                      box-shadow: 0 2px 8px rgba(0,0,0,0.1); max-width: 400px; }
+        .error-card h2 { color: #dc2626; margin-bottom: 12px; }
+        .error-card p { color: #64748b; margin-bottom: 20px; }
+        .error-card a { color: #2563eb; text-decoration: none; font-weight: 500; }
+        .error-card a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="error-card">
+        <h2>⚠ Error</h2>
+        <p th:text="${error}">Something went wrong</p>
+        <a th:href="@{/}">← Back to Dashboard</a>
+    </div>
+</body>
+</html>

@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mock Auth — Key Exchange Audit</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #f0f2f5; color: #1a1a2e; }
+        .header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: #fff; padding: 20px 32px; }
+        .header h1 { font-size: 22px; font-weight: 600; }
+        .header p { font-size: 13px; color: #94a3b8; margin-top: 4px; }
+        .nav { margin-top: 12px; display: flex; gap: 8px; }
+        .nav-link { color: #94a3b8; text-decoration: none; padding: 6px 16px; border-radius: 6px; font-size: 13px; font-weight: 500; transition: all 0.2s; }
+        .nav-link:hover { background: rgba(255,255,255,0.1); color: #fff; }
+        .nav-link.active { background: rgba(255,255,255,0.15); color: #fff; }
+        .container { max-width: 1200px; margin: 24px auto; padding: 0 16px; }
+
+        /* Key info banner */
+        .key-info { background: #fff; border-radius: 10px; padding: 20px 24px; margin-bottom: 24px;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.08); display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+        .key-info .icon { font-size: 36px; }
+        .key-info .details h3 { font-size: 14px; color: #475569; }
+        .key-info .details .fingerprint { font-family: 'Courier New', monospace; font-size: 15px; font-weight: 700;
+                                           color: #1a1a2e; margin-top: 2px; letter-spacing: 1px; }
+        .key-info .details .algo { font-size: 12px; color: #94a3b8; margin-top: 2px; }
+
+        /* Summary cards */
+        .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .card { background: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        .card .label { font-size: 12px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+        .card .value { font-size: 28px; font-weight: 700; margin-top: 4px; }
+        .card.total .value { color: #1a1a2e; }
+        .card.success .value { color: #059669; }
+        .card.failed .value { color: #dc2626; }
+
+        /* Filter bar */
+        .filter-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+        .filter-bar label { font-size: 13px; font-weight: 500; color: #475569; }
+        .filter-bar select, .filter-bar button {
+            padding: 7px 14px; border-radius: 6px; border: 1px solid #cbd5e1;
+            font-size: 13px; background: #fff; cursor: pointer;
+        }
+        .filter-bar button { background: #1a1a2e; color: #fff; border: none; }
+        .filter-bar button:hover { background: #16213e; }
+        .filter-bar a.clear { font-size: 13px; color: #64748b; text-decoration: none; }
+        .filter-bar a.clear:hover { color: #1a1a2e; }
+
+        /* Table */
+        .table-wrap { background: #fff; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: #f8fafc; text-align: left; padding: 12px 16px; font-size: 12px;
+             text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; border-bottom: 1px solid #e2e8f0; }
+        td { padding: 12px 16px; font-size: 13px; border-bottom: 1px solid #f1f5f9; }
+        tr:hover td { background: #f8fafc; }
+
+        /* Status badges */
+        .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px;
+                 font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+        .badge-success { background: #d1fae5; color: #065f46; }
+        .badge-unauthorized { background: #fee2e2; color: #991b1b; }
+        .badge-forbidden { background: #fef3c7; color: #92400e; }
+
+        .ip { font-family: 'Courier New', monospace; font-size: 12px; color: #475569; }
+        .endpoint { font-family: 'Courier New', monospace; font-size: 12px; color: #2563eb; }
+        .reason { color: #dc2626; font-size: 12px; }
+        .fingerprint-cell { font-family: 'Courier New', monospace; font-size: 11px; color: #059669; }
+        .ua { font-size: 11px; color: #94a3b8; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        /* Pagination */
+        .pagination { display: flex; justify-content: center; gap: 8px; padding: 20px; }
+        .pagination a, .pagination span {
+            padding: 6px 14px; border-radius: 6px; font-size: 13px;
+            text-decoration: none; border: 1px solid #e2e8f0;
+        }
+        .pagination a { color: #475569; background: #fff; }
+        .pagination a:hover { background: #f1f5f9; }
+        .pagination span.active { background: #1a1a2e; color: #fff; border-color: #1a1a2e; }
+        .pagination span.disabled { color: #cbd5e1; cursor: default; }
+
+        /* Empty state */
+        .empty { text-align: center; padding: 60px 20px; color: #94a3b8; }
+        .empty h3 { font-size: 18px; margin-bottom: 8px; color: #64748b; }
+        .empty p { font-size: 14px; }
+
+        @media (max-width: 768px) {
+            .table-wrap { overflow-x: auto; }
+            table { min-width: 800px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔐 Mock Authorization Service</h1>
+        <p>Key exchange audit — tracking all public key requests</p>
+        <nav class="nav">
+            <a href="/" class="nav-link">📦 Batch Processing</a>
+            <a href="/key-exchange" class="nav-link active">🔑 Key Exchange</a>
+        </nav>
+    </div>
+
+    <div class="container">
+        <!-- Current Key Info -->
+        <div class="key-info">
+            <div class="icon">🔑</div>
+            <div class="details">
+                <h3>Current RSA Public Key</h3>
+                <div class="fingerprint" th:text="${keyFingerprint}">AA:BB:CC:DD</div>
+                <div class="algo">RSA-2048 / X.509 PEM / OAEP SHA-256</div>
+            </div>
+        </div>
+
+        <!-- Summary Cards -->
+        <div class="summary">
+            <div class="card total">
+                <div class="label">Total Requests</div>
+                <div class="value" th:text="${totalRequests}">0</div>
+            </div>
+            <div class="card success">
+                <div class="label">Successful</div>
+                <div class="value" th:text="${successCount}">0</div>
+            </div>
+            <div class="card failed">
+                <div class="label">Failed / Rejected</div>
+                <div class="value" th:text="${failedCount}">0</div>
+            </div>
+        </div>
+
+        <!-- Filter -->
+        <form class="filter-bar" th:action="@{/key-exchange}" method="get">
+            <label>Filter by status:</label>
+            <select name="status">
+                <option value="">All</option>
+                <option value="SUCCESS" th:selected="${statusFilter != null && statusFilter.toUpperCase() == 'SUCCESS'}">SUCCESS</option>
+                <option value="UNAUTHORIZED" th:selected="${statusFilter != null && statusFilter.toUpperCase() == 'UNAUTHORIZED'}">UNAUTHORIZED</option>
+                <option value="FORBIDDEN" th:selected="${statusFilter != null && statusFilter.toUpperCase() == 'FORBIDDEN'}">FORBIDDEN</option>
+            </select>
+            <button type="submit">Filter</button>
+            <a class="clear" th:href="@{/key-exchange}">Clear</a>
+        </form>
+
+        <!-- Audit Log Table -->
+        <div class="table-wrap" th:if="${!audits.content.isEmpty()}">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Status</th>
+                        <th>IP Address</th>
+                        <th>Endpoint</th>
+                        <th>Key Fingerprint</th>
+                        <th>Failure Reason</th>
+                        <th>User Agent</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="audit : ${audits.content}">
+                        <td style="white-space: nowrap; font-size: 12px;"
+                            th:text="${audit.requestedAt != null} ? ${#temporals.format(audit.requestedAt, 'yyyy-MM-dd HH:mm:ss')} : '-'">-</td>
+                        <td>
+                            <span class="badge"
+                                  th:classappend="${audit.status == 'SUCCESS'} ? 'badge-success' :
+                                                  (${audit.status == 'UNAUTHORIZED'} ? 'badge-unauthorized' : 'badge-forbidden')"
+                                  th:text="${audit.status}">STATUS</span>
+                        </td>
+                        <td class="ip" th:text="${audit.requesterIp}">127.0.0.1</td>
+                        <td class="endpoint" th:text="${audit.endpoint}">/api/internal/public-key</td>
+                        <td class="fingerprint-cell" th:text="${audit.keyFingerprint != null} ? ${audit.keyFingerprint} : '-'">-</td>
+                        <td class="reason" th:text="${audit.failureReason != null} ? ${audit.failureReason} : '-'">-</td>
+                        <td class="ua" th:text="${audit.userAgent != null} ? ${audit.userAgent} : '-'"
+                            th:title="${audit.userAgent}">-</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- Pagination -->
+            <div class="pagination" th:if="${audits.totalPages > 1}">
+                <a th:if="${currentPage > 0}"
+                   th:href="@{/key-exchange(page=${currentPage - 1}, status=${statusFilter})}">« Prev</a>
+                <span class="disabled" th:if="${currentPage == 0}">« Prev</span>
+
+                <th:block th:each="i : ${#numbers.sequence(0, audits.totalPages - 1)}">
+                    <span class="active" th:if="${i == currentPage}" th:text="${i + 1}">1</span>
+                    <a th:unless="${i == currentPage}"
+                       th:href="@{/key-exchange(page=${i}, status=${statusFilter})}" th:text="${i + 1}">1</a>
+                </th:block>
+
+                <a th:if="${currentPage < audits.totalPages - 1}"
+                   th:href="@{/key-exchange(page=${currentPage + 1}, status=${statusFilter})}">Next »</a>
+                <span class="disabled" th:if="${currentPage >= audits.totalPages - 1}">Next »</span>
+            </div>
+        </div>
+
+        <!-- Empty state -->
+        <div class="empty" th:if="${audits.content.isEmpty()}">
+            <h3>No key exchange requests yet</h3>
+            <p>Waiting for the producer system to fetch the public key via
+               <strong>GET /api/internal/public-key</strong></p>
+        </div>
+    </div>
+</body>
+</html>

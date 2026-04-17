@@ -1,0 +1,80 @@
+server:
+  port: 8881  # Separate from producer's 8880
+  ssl:
+    enabled: true
+    key-store: classpath:keystore.p12
+    key-store-password: RtaConsumer@2026
+    key-store-type: PKCS12
+    key-alias: rta-consumer-auth
+
+spring:
+  application:
+    name: mock-authorization-service
+
+  # --- Database (MySQL - same localhost as producer system) ---
+  datasource:
+    url: jdbc:mysql://localhost:3306/consumer_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&createDatabaseIfNotExist=true
+    username: root
+    password: MySql_0831MySql_0831
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true
+        jdbc:
+          batch_size: 100
+        order_inserts: true
+        order_updates: true
+    open-in-view: false
+
+  # --- Flyway (matches producer pattern) ---
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+
+  # --- Kafka (matching producer's config) ---
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: mock-auth-service
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+        spring.json.use.type.headers: false
+        spring.json.value.default.type: com.worldline.mock.dto.BatchRequestMessage
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        max.block.ms: 5000
+
+# --- App Config ---
+app:
+  kafka:
+    topic:
+      batch-request: batch-request
+      batch-response: batch-response
+    concurrency: 3
+  crypto:
+    rsa:
+      key-dir: ./keys       # RSA key pair PEM files auto-generated here
+      key-size: 2048
+  security:
+    # API key for internal endpoints — producer must send this in X-API-Key header
+    api-key: rta-consumer-internal-key-2026
+    # Only these IPs can access /api/internal/** endpoints (comma-separated)
+    ip-whitelist: 127.0.0.1,0:0:0:0:0:0:0:1,::1,localhost
+  processing:
+    batch-chunk-size: 500
+
+logging:
+  level:
+    com.worldline.mock: DEBUG
+    org.apache.kafka: WARN
