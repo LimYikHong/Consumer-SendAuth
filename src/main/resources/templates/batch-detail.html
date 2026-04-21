@@ -190,12 +190,12 @@
                     <tr>
                         <th>#</th>
                         <th>Transaction ID</th>
-                        <th>Account</th>
-                        <th>Acct Status</th>
+                        <th>Merchant</th>
+                        <th>Customer</th>
+                        <th>Masked PAN</th>
                         <th>Amount</th>
                         <th>Currency</th>
-                        <th>Merchant</th>
-                        <th>Category</th>
+                        <th>Billing Date</th>
                         <th>Result</th>
                         <th>Reason</th>
                         <th>Processed At</th>
@@ -205,16 +205,13 @@
                     <tr th:each="txn, iter : ${transactions.content}">
                         <td th:text="${(currentPage * 50) + iter.count}">1</td>
                         <td style="font-family: monospace; font-size: 12px;" th:text="${txn.transactionId}">TXN-001</td>
-                        <td style="font-family: monospace;" th:text="${txn.accountNumber}">ACC-123</td>
-                        <td>
-                            <span th:text="${txn.accountStatus}"
-                                  th:style="${txn.accountStatus.name() == 'BLOCKED'} ? 'color:#dc2626;font-weight:600' : ''">ACTIVE</span>
-                        </td>
+                        <td th:text="${txn.merchantId}">-</td>
+                        <td th:text="${txn.merchantCustomer}">-</td>
+                        <td style="font-family: monospace;" th:text="${txn.maskedPan}">****1234</td>
                         <td style="font-weight: 600; text-align: right;"
-                            th:text="${#numbers.formatDecimal(txn.amount, 1, 2)}">0.00</td>
+                            th:text="${#numbers.formatDecimal(txn.amountCents / 100.0, 1, 2)}">0.00</td>
                         <td th:text="${txn.currency}">MYR</td>
-                        <td th:text="${txn.merchantName}">-</td>
-                        <td th:text="${txn.merchantCategory}">-</td>
+                        <td style="font-size: 12px;" th:text="${txn.actualBillingDate != null ? txn.actualBillingDate : '-'}">-</td>
                         <td>
                             <span th:class="${txn.authResult.name() == 'APPROVED'} ? 'result-approved' : 'result-declined'"
                                   th:text="${txn.authResult}">APPROVED</span>

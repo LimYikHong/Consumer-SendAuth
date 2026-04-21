@@ -1,52 +1,57 @@
 package com.worldline.mock.service;
 
-import com.worldline.mock.entity.AccountStatus;
 import com.worldline.mock.entity.AuthorizationResult;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.math.BigDecimal;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * Rule-based mock authorization engine.
+ * Rule-based mock authorization engine. Amount is in CENTS (e.g. 50000 =
+ * $500.00).
  *
- * Rules: 1. If account status is BLOCKED → DECLINED 2. If amount < 500           → APPROVED
- *   3. If amount >= 500 → RANDOM (50/50 APPROVED or DECLINED)
+ * Rules: 1. If amount_cents < 50000 (i.e. < $500) → APPROVED
+ *   2. If amount_cents >= 50000 (i.e. >= $500) → RANDOM (50/50 APPROVED or
+ * DECLINED)
  */
 @Service
 @Slf4j
 public class AuthorizationEngine {
 
-    private static final BigDecimal THRESHOLD = new BigDecimal("500");
+    /**
+     * Threshold in cents: 50000 cents = $500.00
+     */
+    private static final long THRESHOLD_CENTS = 50000L;
 
     public record Decision(AuthorizationResult result, String reason) {
+
     }
 
     /**
      * Evaluate a single transaction and return a decision.
+     *
+     * @param amountCents transaction amount in cents
      */
-    public Decision evaluate(BigDecimal amount, AccountStatus accountStatus) {
+    public Decision evaluate(long amountCents) {
 
-        // Rule 1: blocked account
-        if (accountStatus == AccountStatus.BLOCKED) {
-            return new Decision(AuthorizationResult.DECLINED, "Account status is BLOCKED");
-        }
-
-        // Rule 2: low amount — auto-approve
-        if (amount.compareTo(THRESHOLD) < 0) {
+        // Rule 1: low amount — auto-approve
+        if (amountCents < THRESHOLD_CENTS) {
             return new Decision(AuthorizationResult.APPROVED,
-                    "Amount " + amount + " is below threshold " + THRESHOLD);
+                    "Amount " + formatCents(amountCents) + " is below threshold " + formatCents(THRESHOLD_CENTS));
         }
 
-        // Rule 3: high amount — random decision
+        // Rule 2: high amount — random decision (50/50)
         boolean approve = ThreadLocalRandom.current().nextBoolean();
         if (approve) {
             return new Decision(AuthorizationResult.APPROVED,
-                    "Amount " + amount + " >= " + THRESHOLD + " — randomly APPROVED");
+                    "Amount " + formatCents(amountCents) + " >= " + formatCents(THRESHOLD_CENTS) + " — randomly APPROVED");
         } else {
             return new Decision(AuthorizationResult.DECLINED,
-                    "Amount " + amount + " >= " + THRESHOLD + " — randomly DECLINED");
+                    "Amount " + formatCents(amountCents) + " >= " + formatCents(THRESHOLD_CENTS) + " — randomly DECLINED");
         }
+    }
+
+    private String formatCents(long cents) {
+        return String.format("%.2f", cents / 100.0);
     }
 }

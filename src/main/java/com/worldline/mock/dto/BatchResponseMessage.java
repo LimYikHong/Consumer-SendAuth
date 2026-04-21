@@ -31,8 +31,8 @@ public class BatchResponseMessage {
     public static class TransactionResultDto {
 
         private String transactionId;
-        private String accountNumber;
-        private String amount;
+        private String merchantId;
+        private String amountCents;
         private String authResult;    // APPROVED or DECLINED
         private String decisionReason;
     }

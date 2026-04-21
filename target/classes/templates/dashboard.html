@@ -77,6 +77,44 @@
             .table-wrap { overflow-x: auto; }
             table { min-width: 700px; }
         }
+
+        /* Producer Key Section */
+        .key-section { background: #fff; border-radius: 10px; padding: 20px 24px; margin-bottom: 24px;
+                       box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        .key-section-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+        .key-section-header .left { display: flex; align-items: center; gap: 14px; }
+        .key-section-header .icon { font-size: 32px; }
+        .key-section-header .title { font-size: 16px; font-weight: 600; color: #1a1a2e; }
+        .key-section-header .subtitle { font-size: 12px; color: #94a3b8; margin-top: 2px; }
+
+        .key-details { margin-top: 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+        .key-detail-item { }
+        .key-detail-item .label { font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
+        .key-detail-item .val { font-size: 14px; font-weight: 600; color: #1a1a2e; margin-top: 2px; }
+        .key-detail-item .val.mono { font-family: 'Courier New', monospace; letter-spacing: 1px; }
+
+        .key-status-badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+        .key-status-no-key { background: #f1f5f9; color: #64748b; }
+        .key-status-active { background: #d1fae5; color: #065f46; }
+        .key-status-renewal { background: #fef3c7; color: #92400e; }
+        .key-status-expired { background: #fee2e2; color: #991b1b; }
+
+        .key-btn { padding: 10px 20px; border-radius: 8px; border: none; font-size: 13px; font-weight: 600;
+                   cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px; }
+        .key-btn-primary { background: #2563eb; color: #fff; }
+        .key-btn-primary:hover { background: #1d4ed8; }
+        .key-btn-warning { background: #f59e0b; color: #fff; }
+        .key-btn-warning:hover { background: #d97706; }
+        .key-btn:disabled { background: #e2e8f0; color: #94a3b8; cursor: not-allowed; }
+
+        .key-message { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; font-weight: 500; }
+        .key-message-success { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+        .key-message-error { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+
+        .key-alert { padding: 10px 16px; border-radius: 8px; margin-top: 12px; font-size: 12px; }
+        .key-alert-warn { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+        .key-alert-danger { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+        .key-alert-info { background: #e0f2fe; color: #0369a1; border: 1px solid #7dd3fc; }
     </style>
 </head>
 <body>
@@ -90,6 +128,94 @@
     </div>
 
     <div class="container">
+        <!-- Flash message for key request -->
+        <div th:if="${keyMessage}" class="key-message"
+             th:classappend="${keyMessageType == 'success'} ? 'key-message-success' : 'key-message-error'"
+             th:text="${keyMessage}">Message</div>
+
+        <!-- Producer RSA Key Section -->
+        <div class="key-section">
+            <div class="key-section-header">
+                <div class="left">
+                    <div class="icon">🔐</div>
+                    <div>
+                        <div class="title">Producer RSA Key (RTA Bank)</div>
+                        <div class="subtitle">RSA-2048 public key from the producer system for encrypting response CSVs</div>
+                    </div>
+                </div>
+                <div>
+                    <form th:action="@{/request-producer-key}" method="post" style="display: inline;"
+                          onsubmit="return confirm('Are you sure you want to fetch the producer RSA key?');">
+                        <!-- No key yet: enabled -->
+                        <button th:if="${keyStatus.statusCode == 'NO_KEY'}"
+                                type="submit" class="key-btn key-btn-primary">
+                            🔑 Request RSA Key
+                        </button>
+                        <!-- Active (day 0-24): disabled -->
+                        <button th:if="${keyStatus.statusCode == 'ACTIVE'}"
+                                type="submit" class="key-btn" disabled
+                                th:title="'Renewal available from day 25 (in ' + ${25 - keyStatus.daysSinceFetch} + ' days)'">
+                            🔄 Renew RSA Key
+                        </button>
+                        <!-- Renewal window (day 25-30): enabled with warning style -->
+                        <button th:if="${keyStatus.statusCode == 'RENEWAL_WINDOW'}"
+                                type="submit" class="key-btn key-btn-warning">
+                            🔄 Renew RSA Key
+                        </button>
+                        <!-- Expired (after 30): disabled -->
+                        <button th:if="${keyStatus.statusCode == 'EXPIRED'}"
+                                type="submit" class="key-btn" disabled
+                                title="Key expired — contact administrator">
+                            ⚠️ Key Expired
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Key details (only if key exists) -->
+            <div th:if="${keyStatus.key != null}" class="key-details">
+                <div class="key-detail-item">
+                    <div class="label">Status</div>
+                    <div class="val">
+                        <span class="key-status-badge"
+                              th:classappend="${keyStatus.statusCode == 'ACTIVE'} ? 'key-status-active' :
+                                              (${keyStatus.statusCode == 'RENEWAL_WINDOW'} ? 'key-status-renewal' : 'key-status-expired')"
+                              th:text="${keyStatus.statusCode}">ACTIVE</span>
+                    </div>
+                </div>
+                <div class="key-detail-item">
+                    <div class="label">Fingerprint</div>
+                    <div class="val mono" th:text="${keyStatus.key.fingerprint}">AA:BB:CC</div>
+                </div>
+                <div class="key-detail-item">
+                    <div class="label">Fetched</div>
+                    <div class="val" th:text="${#temporals.format(keyStatus.key.fetchedAt, 'yyyy-MM-dd HH:mm:ss')}">-</div>
+                </div>
+                <div class="key-detail-item">
+                    <div class="label">Expires</div>
+                    <div class="val" th:text="${#temporals.format(keyStatus.key.expiresAt, 'yyyy-MM-dd HH:mm:ss')}">-</div>
+                </div>
+                <div class="key-detail-item">
+                    <div class="label">Age</div>
+                    <div class="val" th:text="${keyStatus.daysSinceFetch} + ' day(s)'">0 days</div>
+                </div>
+            </div>
+
+            <!-- Alert messages -->
+            <div th:if="${keyStatus.statusCode == 'RENEWAL_WINDOW'}" class="key-alert key-alert-warn">
+                ⚠️ <span th:text="${keyStatus.message}">Key expiring soon</span>
+            </div>
+            <div th:if="${keyStatus.statusCode == 'EXPIRED'}" class="key-alert key-alert-danger">
+                🚫 <span th:text="${keyStatus.message}">Key expired</span>
+            </div>
+            <div th:if="${keyStatus.statusCode == 'ACTIVE'}" class="key-alert key-alert-info">
+                ℹ️ <span th:text="${keyStatus.message}">Key is active</span>
+            </div>
+            <div th:if="${keyStatus.statusCode == 'NO_KEY'}" class="key-alert key-alert-danger">
+                🔑 <span th:text="${keyStatus.message}">No key</span>
+            </div>
+        </div>
+
         <!-- Summary Cards -->
         <div class="summary">
             <div class="card total">

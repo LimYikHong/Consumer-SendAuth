@@ -2,17 +2,18 @@ package com.worldline.mock.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
  * Individual transaction record from the CSV. Stores the original data +
- * authorization decision. Optimized for bulk insert via Hibernate batching.
+ * authorization decision. Fields match the producer's CSV columns:
+ * transaction_id, merchant_id, merchant_customer, masked_pan, amount_cents,
+ * currency, actual_billing_date, recurring_reference
  */
 @Entity
 @Table(name = "transaction_record", indexes = {
     @Index(name = "idx_txn_batch_id", columnList = "batchId"),
-    @Index(name = "idx_txn_account_number", columnList = "accountNumber"),
+    @Index(name = "idx_txn_merchant_id", columnList = "merchantId"),
     @Index(name = "idx_txn_result", columnList = "authResult"),
     @Index(name = "idx_txn_batch_result", columnList = "batchId, authResult")
 })
@@ -34,29 +35,49 @@ public class TransactionRecord {
     private String batchId;
 
     /**
-     * Original transaction ID from producer
+     * Original transaction ID from producer (their DB primary key)
      */
     @Column(nullable = false, length = 64)
     private String transactionId;
 
-    @Column(nullable = false, length = 32)
-    private String accountNumber;
+    /**
+     * Merchant identifier
+     */
+    @Column(nullable = false, length = 64)
+    private String merchantId;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20, columnDefinition = "varchar(20)")
-    private AccountStatus accountStatus;
+    /**
+     * Merchant's customer reference
+     */
+    @Column(length = 100)
+    private String merchantCustomer;
 
-    @Column(nullable = false, precision = 15, scale = 2)
-    private BigDecimal amount;
+    /**
+     * Masked card PAN
+     */
+    @Column(length = 32)
+    private String maskedPan;
+
+    /**
+     * Amount in cents (e.g. 50000 = $500.00)
+     */
+    @Column(nullable = false)
+    private Long amountCents;
 
     @Column(length = 3)
     private String currency;
 
-    @Column(length = 100)
-    private String merchantName;
+    /**
+     * Billing date from the producer
+     */
+    @Column(length = 30)
+    private String actualBillingDate;
 
-    @Column(length = 20)
-    private String merchantCategory;
+    /**
+     * Recurring reference if applicable
+     */
+    @Column(length = 100)
+    private String recurringReference;
 
     /**
      * The authorization decision made by this mock service

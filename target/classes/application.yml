@@ -71,8 +71,17 @@ app:
     api-key: rta-consumer-internal-key-2026
     # Only these IPs can access /api/internal/** endpoints (comma-separated)
     ip-whitelist: 127.0.0.1,0:0:0:0:0:0:0:1,::1,localhost
+  producer:
+    # Producer system (RTA Bank) internal API base URL for key exchange
+    base-url: https://localhost:8086
   processing:
     batch-chunk-size: 500
+  minio:
+    endpoint: http://localhost:9090
+    access-key: minioadmin
+    secret-key: minioadmin
+    bucket:
+      name: consumer-send-auth            # single bucket matching producer system
 
 logging:
   level:

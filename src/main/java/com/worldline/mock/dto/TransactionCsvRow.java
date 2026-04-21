@@ -4,8 +4,9 @@ import com.opencsv.bean.CsvBindByName;
 import lombok.*;
 
 /**
- * Maps a single row from the decrypted CSV file. Column names must match the
- * CSV header produced by the Batch Service.
+ * Maps a single row from the decrypted CSV file. Column names match the
+ * producer's BatchFileGenerationService output:
+ * transaction_id,merchant_id,merchant_customer,masked_pan,amount_cents,currency,actual_billing_date,recurring_reference
  */
 @Getter
 @Setter
@@ -14,24 +15,27 @@ import lombok.*;
 @Builder
 public class TransactionCsvRow {
 
-    @CsvBindByName(column = "transactionId")
+    @CsvBindByName(column = "transaction_id")
     private String transactionId;
 
-    @CsvBindByName(column = "accountNumber")
-    private String accountNumber;
+    @CsvBindByName(column = "merchant_id")
+    private String merchantId;
 
-    @CsvBindByName(column = "accountStatus")
-    private String accountStatus;
+    @CsvBindByName(column = "merchant_customer")
+    private String merchantCustomer;
 
-    @CsvBindByName(column = "amount")
-    private String amount;
+    @CsvBindByName(column = "masked_pan")
+    private String maskedPan;
+
+    @CsvBindByName(column = "amount_cents")
+    private String amountCents;
 
     @CsvBindByName(column = "currency")
     private String currency;
 
-    @CsvBindByName(column = "merchantName")
-    private String merchantName;
+    @CsvBindByName(column = "actual_billing_date")
+    private String actualBillingDate;
 
-    @CsvBindByName(column = "merchantCategory")
-    private String merchantCategory;
+    @CsvBindByName(column = "recurring_reference")
+    private String recurringReference;
 }
