@@ -102,8 +102,11 @@ public class ProducerKeyService {
 
     /**
      * Fetch the RSA public key from the producer system via internal API.
+     *
+     * @param source who initiated the fetch (e.g. "auto-fetch",
+     * "dashboard-user")
      */
-    public ProducerRsaKey fetchProducerKey() {
+    public ProducerRsaKey fetchProducerKey(String source) {
         log.info("🔑 Fetching RSA public key from producer at {}", producerBaseUrl);
 
         try {
@@ -144,13 +147,13 @@ public class ProducerKeyService {
                     .fetchedAt(LocalDateTime.now())
                     .expiresAt(LocalDateTime.now().plusDays(30))
                     .status("ACTIVE")
-                    .requestedBy("dashboard-user")
+                    .requestedBy(source)
                     .build();
             keyRepository.save(newKey);
 
             // Audit log
             auditService.logSuccess("localhost", "/producer-key-fetch",
-                    fingerprint, "Dashboard Button");
+                    fingerprint, source);
 
             log.info("  ✅ Producer RSA key fetched and stored. Fingerprint: {}", fingerprint);
             return newKey;
@@ -158,7 +161,7 @@ public class ProducerKeyService {
         } catch (Exception e) {
             log.error("  ❌ Failed to fetch producer RSA key: {}", e.getMessage());
             auditService.logFailure("localhost", "/producer-key-fetch",
-                    "FETCH_FAILED", e.getMessage(), "Dashboard Button");
+                    "FETCH_FAILED", e.getMessage(), source);
             throw new RuntimeException("Failed to fetch producer RSA key: " + e.getMessage(), e);
         }
     }

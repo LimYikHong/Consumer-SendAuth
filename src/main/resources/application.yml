@@ -1,5 +1,5 @@
 server:
-  port: 8881  # Separate from producer's 8880
+  port: 8882  # Separate from producer's 8880
   ssl:
     enabled: true
     key-store: classpath:keystore.p12

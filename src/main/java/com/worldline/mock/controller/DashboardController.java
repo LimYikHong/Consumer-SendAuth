@@ -152,7 +152,7 @@ public class DashboardController {
     @PostMapping("/request-producer-key")
     public String requestProducerKey(RedirectAttributes redirectAttributes) {
         try {
-            producerKeyService.fetchProducerKey();
+            producerKeyService.fetchProducerKey("dashboard-user");
             redirectAttributes.addFlashAttribute("keyMessage", "✅ Producer RSA key fetched successfully!");
             redirectAttributes.addFlashAttribute("keyMessageType", "success");
         } catch (Exception e) {

@@ -11,8 +11,7 @@ import java.util.concurrent.ThreadLocalRandom;
  * $500.00).
  *
  * Rules: 1. If amount_cents < 50000 (i.e. < $500) → APPROVED
- *   2. If amount_cents >= 50000 (i.e. >= $500) → RANDOM (50/50 APPROVED or
- * DECLINED)
+ *   2. If amount_cents >= 50000 (i.e. >= $500) → 80-90% APPROVED, rest DECLINED
  */
 @Service
 @Slf4j
@@ -22,6 +21,12 @@ public class AuthorizationEngine {
      * Threshold in cents: 50000 cents = $500.00
      */
     private static final long THRESHOLD_CENTS = 50000L;
+
+    /**
+     * Approval rate for high-amount transactions: 80% to 90% (randomized)
+     */
+    private static final double MIN_APPROVAL_RATE = 0.80;
+    private static final double MAX_APPROVAL_RATE = 0.90;
 
     public record Decision(AuthorizationResult result, String reason) {
 
@@ -40,14 +45,15 @@ public class AuthorizationEngine {
                     "Amount " + formatCents(amountCents) + " is below threshold " + formatCents(THRESHOLD_CENTS));
         }
 
-        // Rule 2: high amount — random decision (50/50)
-        boolean approve = ThreadLocalRandom.current().nextBoolean();
+        // Rule 2: high amount — 80%-90% approval rate
+        double approvalRate = MIN_APPROVAL_RATE + ThreadLocalRandom.current().nextDouble() * (MAX_APPROVAL_RATE - MIN_APPROVAL_RATE);
+        boolean approve = ThreadLocalRandom.current().nextDouble() < approvalRate;
         if (approve) {
             return new Decision(AuthorizationResult.APPROVED,
-                    "Amount " + formatCents(amountCents) + " >= " + formatCents(THRESHOLD_CENTS) + " — randomly APPROVED");
+                    "APPROVED");
         } else {
             return new Decision(AuthorizationResult.DECLINED,
-                    "Amount " + formatCents(amountCents) + " >= " + formatCents(THRESHOLD_CENTS) + " — randomly DECLINED");
+                    "DECLINED - insufficient amount");
         }
     }
 

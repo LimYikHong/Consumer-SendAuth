@@ -38,6 +38,7 @@ public class BatchUploadService {
     private final BatchJobRepository batchJobRepository;
     private final TransactionRecordRepository transactionRecordRepository;
     private final MinioService minioService;
+    private final ProducerKeyService producerKeyService;
 
     @Value("${app.processing.batch-chunk-size:500}")
     private int chunkSize;
@@ -136,8 +137,8 @@ public class BatchUploadService {
                 ));
 
                 if (decision.result() == AuthorizationResult.APPROVED) {
-                    approved++; 
-                }else {
+                    approved++;
+                } else {
                     declined++;
                 }
             }
@@ -156,13 +157,19 @@ public class BatchUploadService {
             // Build result CSV
             String resultCsv = buildResultCsv(resultRows);
 
-            // Encrypt result CSV
+            // Encrypt result CSV — resolve producer's RSA public key
             java.security.PublicKey recipientKey = null;
             if (producerPublicKeyPem != null && !producerPublicKeyPem.isBlank()) {
                 recipientKey = csvEncryptionService.parsePublicKeyPem(producerPublicKeyPem);
-                log.info("  Using producer's RSA public key for result encryption");
+                log.info("  Using producer's RSA public key from request param");
             } else {
-                log.info("  No producer public key provided, using own key pair");
+                // Auto-fetch producer key if not in DB yet
+                recipientKey = resolveProducerKey();
+                if (recipientKey != null) {
+                    log.info("  Using producer's RSA public key from DB/auto-fetch");
+                } else {
+                    log.warn("  ⚠ Could not obtain producer RSA key — encrypting with own key (producer won't be able to decrypt!)");
+                }
             }
             CsvEncryptionService.EncryptedPayload encryptedResult
                     = csvEncryptionService.encrypt(resultCsv, recipientKey);
@@ -170,7 +177,7 @@ public class BatchUploadService {
             // Store encrypted result in MinIO
             minioService.storeProcessedFile(batchId, encryptedResult.encryptedContent().getBytes());
 
-            log.info("  ✅ Batch upload [{}] completed: {} approved, {} declined out of {}",
+            log.info("  Batch upload [{}] completed: {} approved, {} declined out of {}",
                     batchId, approved, declined, rows.size());
 
             return new BatchUploadResult(batchId, "COMPLETED", rows.size(), approved, declined,
@@ -180,12 +187,38 @@ public class BatchUploadService {
         } catch (IllegalStateException e) {
             throw e;
         } catch (Exception e) {
-            log.error("  ❌ Batch upload [{}] failed: {}", batchId, e.getMessage(), e);
+            log.error("   Batch upload [{}] failed: {}", batchId, e.getMessage(), e);
             job.setStatus(BatchStatus.FAILED);
             job.setErrorMessage(e.getMessage());
             job.setCompletedAt(LocalDateTime.now());
             batchJobRepository.save(job);
             return new BatchUploadResult(batchId, "FAILED", 0, 0, 0, null, null, null, e.getMessage());
+        }
+    }
+
+    /**
+     * Resolve the producer's RSA public key: 1. Check DB for an active key 2.
+     * If none, auto-fetch from producer's internal API
+     */
+    private java.security.PublicKey resolveProducerKey() {
+        // Try DB first
+        var activeKey = producerKeyService.getActiveKey();
+        if (activeKey.isPresent()) {
+            try {
+                return csvEncryptionService.parsePublicKeyPem(activeKey.get().getPublicKeyPem());
+            } catch (Exception e) {
+                log.warn("  Failed to parse stored producer key, will re-fetch: {}", e.getMessage());
+            }
+        }
+
+        // Auto-fetch from producer
+        log.info("  🔑 No active producer RSA key found — auto-fetching from producer...");
+        try {
+            var fetched = producerKeyService.fetchProducerKey("auto-fetch");
+            return csvEncryptionService.parsePublicKeyPem(fetched.getPublicKeyPem());
+        } catch (Exception e) {
+            log.error("  ❌ Auto-fetch of producer RSA key failed: {}", e.getMessage());
+            return null;
         }
     }
 
