@@ -54,6 +54,8 @@ spring:
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       properties:
         max.block.ms: 5000
+        spring.json.add.type.headers: false  # don't embed class name — producer side rejects unknown packages
+        max.request.size: 10485760           # 10MB (default is 1MB)
 
 # --- App Config ---
 app:

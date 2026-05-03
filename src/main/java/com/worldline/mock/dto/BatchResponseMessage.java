@@ -4,8 +4,8 @@ import lombok.*;
 import java.util.List;
 
 /**
- * Kafka message published to batch-response topic. Contains the authorization
- * results for each transaction in the batch.
+ * Kafka message published to batch-response topic. Field names match what the
+ * producer's TransactionUpdateService expects.
  */
 @Getter
 @Setter
@@ -14,14 +14,40 @@ import java.util.List;
 @Builder
 public class BatchResponseMessage {
 
-    private String batchId;
-    private String status;           // COMPLETED or FAILED
-    private int totalRecords;
-    private int approvedCount;
-    private int declinedCount;
+    /**
+     * Same RtaBatch PK that was sent in the request
+     */
+    private Object batchId;
+
+    /**
+     * Merchant ID passed through from the request
+     */
+    private String merchantId;
+
+    /**
+     * "PROCESSED" on success, "FAILED" on error
+     */
+    private String batchStatus;
+
+    /**
+     * ISO timestamp of when processing completed
+     */
     private String processedAt;
-    private String errorMessage;     // null if successful
+
+    /**
+     * Human-readable error message (null if successful)
+     */
+    private String errorMessage;
+
+    /**
+     * One entry per transaction in the CSV
+     */
     private List<TransactionResultDto> results;
+
+    // Encrypted result CSV — producer decrypts with its RSA private key
+    private String encryptedAesKey;
+    private String encryptedContent;
+    private String iv;
 
     @Getter
     @Setter
@@ -30,10 +56,23 @@ public class BatchResponseMessage {
     @Builder
     public static class TransactionResultDto {
 
+        /**
+         * rta_transaction.transaction_id (PK) — from CSV first column
+         */
         private String transactionId;
+
+        /**
+         * "APPROVED" or "FAILED"
+         */
+        private String status;
+
+        /**
+         * "Authorized by mock service" or "Declined: insufficient funds (mock)"
+         */
+        private String remark;
+
+        // Extra fields for internal audit
         private String merchantId;
         private String amountCents;
-        private String authResult;    // APPROVED or DECLINED
-        private String decisionReason;
     }
 }

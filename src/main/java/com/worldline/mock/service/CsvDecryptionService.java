@@ -37,6 +37,17 @@ public class CsvDecryptionService {
      * @return plaintext CSV string
      */
     public String decrypt(String encryptedAesKeyBase64, String encryptedCsvBase64, String ivBase64) {
+        // Null-check all inputs before attempting decryption
+        if (encryptedAesKeyBase64 == null || encryptedAesKeyBase64.isBlank()) {
+            throw new RuntimeException("encryptedAesKey is null/empty — check producer Kafka message field name matches 'encryptedAesKey'");
+        }
+        if (encryptedCsvBase64 == null || encryptedCsvBase64.isBlank()) {
+            throw new RuntimeException("encryptedCsvContent is null/empty — check producer Kafka message field name matches 'encryptedCsvContent'");
+        }
+        if (ivBase64 == null || ivBase64.isBlank()) {
+            log.warn("IV is null/empty — will attempt ECB mode (not recommended)");
+        }
+
         try {
             // Step 1: Decrypt AES session key using RSA private key
             SecretKey aesKey = decryptAesKey(encryptedAesKeyBase64);

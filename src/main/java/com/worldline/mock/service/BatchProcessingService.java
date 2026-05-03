@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.StringReader;
+import java.io.StringWriter;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -30,6 +31,8 @@ import java.util.List;
 public class BatchProcessingService {
 
     private final CsvDecryptionService csvDecryptionService;
+    private final CsvEncryptionService csvEncryptionService;
+    private final ProducerKeyService producerKeyService;
     private final AuthorizationEngine authorizationEngine;
     private final BatchJobRepository batchJobRepository;
     private final TransactionRecordRepository transactionRecordRepository;
@@ -46,7 +49,10 @@ public class BatchProcessingService {
         if (batchJobRepository.existsByBatchId(batchId)) {
             log.warn("Batch [{}] already processed, skipping", batchId);
             BatchJob existing = batchJobRepository.findByBatchId(batchId).orElseThrow();
-            return buildResponse(existing, transactionRecordRepository.findByBatchId(batchId));
+            List<TransactionRecord> existingRecords = transactionRecordRepository.findByBatchId(batchId);
+            String existingResultCsv = buildResultCsv(existingRecords);
+            CsvEncryptionService.EncryptedPayload existingEncrypted = encryptForProducer(existingResultCsv);
+            return buildResponse(existing, existingRecords, existingEncrypted);
         }
 
         BatchJob job = BatchJob.builder()
@@ -94,8 +100,8 @@ public class BatchProcessingService {
                 records.add(record);
 
                 if (decision.result() == AuthorizationResult.APPROVED) {
-                    approved++; 
-                }else {
+                    approved++;
+                } else {
                     declined++;
                 }
             }
@@ -111,7 +117,12 @@ public class BatchProcessingService {
 
             log.info("  ✅ Batch [{}] completed: {} approved, {} declined out of {}",
                     batchId, approved, declined, rows.size());
-            return buildResponse(job, records);
+
+            // Re-encrypt result CSV with producer's RSA public key
+            String resultCsv = buildResultCsv(records);
+            CsvEncryptionService.EncryptedPayload encrypted = encryptForProducer(resultCsv);
+
+            return buildResponse(job, records, encrypted);
 
         } catch (Exception e) {
             log.error("  ❌ Batch [{}] failed: {}", batchId, e.getMessage(), e);
@@ -121,7 +132,7 @@ public class BatchProcessingService {
             batchJobRepository.save(job);
 
             return BatchResponseMessage.builder()
-                    .batchId(batchId).status("FAILED")
+                    .batchId(batchId).batchStatus("FAILED")
                     .errorMessage(e.getMessage())
                     .processedAt(LocalDateTime.now().toString())
                     .build();
@@ -147,25 +158,74 @@ public class BatchProcessingService {
         }
     }
 
-    private BatchResponseMessage buildResponse(BatchJob job, List<TransactionRecord> records) {
+    /**
+     * Encrypt result CSV with producer's RSA public key (auto-fetch if needed).
+     */
+    private CsvEncryptionService.EncryptedPayload encryptForProducer(String csv) {
+        java.security.PublicKey producerKey = null;
+        try {
+            var active = producerKeyService.getActiveKey();
+            if (active.isPresent()) {
+                producerKey = csvEncryptionService.parsePublicKeyPem(active.get().getPublicKeyPem());
+                log.info("  Using stored producer RSA key for result encryption");
+            } else {
+                log.info("  🔑 No stored producer key — auto-fetching...");
+                var fetched = producerKeyService.fetchProducerKey("auto-fetch");
+                producerKey = csvEncryptionService.parsePublicKeyPem(fetched.getPublicKeyPem());
+            }
+        } catch (Exception e) {
+            log.warn("  ⚠ Could not get producer RSA key ({}), encrypting with own key", e.getMessage());
+        }
+        try {
+            return csvEncryptionService.encrypt(csv, producerKey);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to encrypt result CSV: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Build result CSV: original columns + auth_result + decision_reason.
+     */
+    private String buildResultCsv(List<TransactionRecord> records) {
+        StringWriter writer = new StringWriter();
+        writer.write("transaction_id,merchant_id,merchant_customer,masked_pan,amount_cents,currency,actual_billing_date,recurring_reference,auth_result,decision_reason\n");
+        for (TransactionRecord r : records) {
+            writer.write(String.join(",",
+                    nvl(r.getTransactionId()), nvl(r.getMerchantId()), nvl(r.getMerchantCustomer()),
+                    nvl(r.getMaskedPan()), String.valueOf(r.getAmountCents()), nvl(r.getCurrency()),
+                    nvl(r.getActualBillingDate()), nvl(r.getRecurringReference()),
+                    r.getAuthResult().name(), nvl(r.getDecisionReason())
+            ));
+            writer.write("\n");
+        }
+        return writer.toString();
+    }
+
+    private String nvl(String s) {
+        return s == null ? "" : s;
+    }
+
+    private BatchResponseMessage buildResponse(BatchJob job, List<TransactionRecord> records,
+            CsvEncryptionService.EncryptedPayload encrypted) {
         List<TransactionResultDto> resultDtos = records.stream()
-                .map(r -> TransactionResultDto.builder()
-                .transactionId(r.getTransactionId())
-                .merchantId(r.getMerchantId())
-                .amountCents(String.valueOf(r.getAmountCents()))
-                .authResult(r.getAuthResult().name())
-                .decisionReason(r.getDecisionReason())
-                .build())
+                .map(r -> {
+                    boolean approved = r.getAuthResult() == AuthorizationResult.APPROVED;
+                    return TransactionResultDto.builder()
+                            .transactionId(r.getTransactionId())
+                            .status(approved ? "APPROVED" : "FAILED")
+                            .remark(approved ? "Authorized by mock service" : "Declined: insufficient funds (mock)")
+                            .merchantId(r.getMerchantId())
+                            .amountCents(String.valueOf(r.getAmountCents()))
+                            .build();
+                })
                 .toList();
 
         return BatchResponseMessage.builder()
                 .batchId(job.getBatchId())
-                .status(job.getStatus().name())
-                .totalRecords(job.getTotalRecords())
-                .approvedCount(job.getApprovedCount())
-                .declinedCount(job.getDeclinedCount())
+                .batchStatus("PROCESSED")
                 .processedAt(LocalDateTime.now().toString())
                 .results(resultDtos)
+                // Note: encrypted CSV is stored in MinIO — not sent over Kafka to avoid 1MB limit
                 .build();
     }
 }

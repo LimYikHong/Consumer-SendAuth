@@ -32,6 +32,19 @@ public class BatchRequestConsumer {
     )
     public void onBatchRequest(BatchRequestMessage message) {
         log.info("📥 Received batch request [{}]", message.getBatchId());
+        log.debug("  Fields — encryptedAesKey={}, encryptedCsvContent={}, iv={}",
+                message.getEncryptedAesKey() != null ? message.getEncryptedAesKey().substring(0, Math.min(20, message.getEncryptedAesKey().length())) + "..." : "NULL",
+                message.getEncryptedCsvContent() != null ? message.getEncryptedCsvContent().substring(0, Math.min(20, message.getEncryptedCsvContent().length())) + "..." : "NULL",
+                message.getIv() != null ? "present" : "NULL");
+
+        // Fail fast if required fields are missing
+        if (message.getEncryptedAesKey() == null || message.getEncryptedCsvContent() == null) {
+            log.error("❌ Batch [{}] has null encryptedAesKey or encryptedCsvContent — possible field name mismatch. encryptedAesKey={}, encryptedCsvContent={}",
+                    message.getBatchId(),
+                    message.getEncryptedAesKey() == null ? "NULL" : "present",
+                    message.getEncryptedCsvContent() == null ? "NULL" : "present");
+            return;
+        }
 
         try {
             // Process the batch (decrypt → parse → authorize → persist)
@@ -59,7 +72,7 @@ public class BatchRequestConsumer {
             // Still publish a FAILED response so the producer knows
             BatchResponseMessage errorResponse = BatchResponseMessage.builder()
                     .batchId(message.getBatchId())
-                    .status("FAILED")
+                    .batchStatus("FAILED")
                     .errorMessage("Internal processing error: " + e.getMessage())
                     .build();
 
