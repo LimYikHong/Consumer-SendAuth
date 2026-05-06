@@ -212,8 +212,8 @@ public class BatchProcessingService {
                     boolean approved = r.getAuthResult() == AuthorizationResult.APPROVED;
                     return TransactionResultDto.builder()
                             .transactionId(r.getTransactionId())
-                            .status(approved ? "APPROVED" : "FAILED")
-                            .remark(approved ? "Authorized by mock service" : "Declined: insufficient funds (mock)")
+                            .status(approved ? "APPROVED" : "DECLINED")
+                            .remark(approved ? "Authorized by mock service" : "Declined: insufficient funds")
                             .merchantId(r.getMerchantId())
                             .amountCents(String.valueOf(r.getAmountCents()))
                             .build();
